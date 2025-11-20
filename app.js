@@ -17,6 +17,9 @@ const healthRoutes = require('./routes/health');
 function createApp() {
     const app = express();
 
+    // Trust Proxy for Vercel/Load Balancers
+    app.set('trust proxy', 1);
+
     // Middleware
     app.use(require('compression')()); // Enable gzip compression
     app.use(helmet());
@@ -58,4 +61,3 @@ function createApp() {
 }
 
 module.exports = createApp;
-// 01
