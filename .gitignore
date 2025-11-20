@@ -1,0 +1,11 @@
+/.env
+/check-db.js
+/create-admin.js
+/debug-users.js
+/node_modules
+/verify-admin.js
+/verify-approvals-v2.js
+/verify-approvals.js
+/verify-email.js
+/verify-refactor.js
+/verify-uploads.js

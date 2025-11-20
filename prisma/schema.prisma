@@ -1,0 +1,227 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "mysql"
+  url      = env("DATABASE_URL")
+}
+
+// Enums
+enum Role {
+  ADMIN
+  MANAGEMENT      // Secretary / Joint Secretary
+  HOD
+  HLC_MEMBER
+  FACULTY
+  STAFF
+  STUDENT
+}
+
+enum EventStatus {
+  DRAFT
+  SUBMITTED
+  HOD_APPROVED    // Approved by HOD, Pending HLC
+  HLC_APPROVED    // Approved by HLC, Pending Management
+  APPROVED        // Final Approval by Management
+  REJECTED
+  SCHEDULED
+  ONGOING
+  COMPLETED
+  ARCHIVED
+}
+
+enum ApprovalStatus {
+  PENDING
+  APPROVED
+  REJECTED
+  CLARIFICATION_NEEDED
+}
+
+enum NotificationType {
+  INFO
+  WARNING
+  SUCCESS
+  ERROR
+}
+
+// Models
+
+model Institution {
+  id          String       @id @default(uuid())
+  name        String
+  code        String       @unique
+  config      Json?        // Tenant-specific config (e.g., HLC mode)
+  approvalConfig Json?     // HLC Voting Rules, Budget Thresholds
+  users       User[]
+  departments Department[]
+  venues      Venue[]
+  createdAt   DateTime     @default(now())
+  updatedAt   DateTime     @updatedAt
+  deletedAt   DateTime?    // Soft Delete
+
+  @@map("institutions")
+}
+
+model Department {
+  id            String      @id @default(uuid())
+  name          String
+  code          String
+  institutionId String
+  institution   Institution @relation(fields: [institutionId], references: [id])
+  users         User[]
+  events        Event[]
+  createdAt     DateTime    @default(now())
+  updatedAt     DateTime    @updatedAt
+  deletedAt     DateTime?   // Soft Delete
+
+  @@unique([institutionId, code])
+  @@map("departments")
+}
+
+model User {
+  id            String       @id @default(uuid())
+  email         String       @unique
+  passwordHash  String
+  name          String
+  role          Role         @default(STAFF)
+  isActive      Boolean      @default(true)
+  refreshToken  String?      @db.Text // For JWT Refresh Token
+  lastLoginAt   DateTime?
+  
+  institutionId String
+  institution   Institution  @relation(fields: [institutionId], references: [id])
+  departmentId  String?
+  department    Department?  @relation(fields: [departmentId], references: [id])
+  
+  events        Event[]
+  approvals     Approval[]   // Approvals made by this user
+  notifications Notification[]
+  
+  createdAt     DateTime     @default(now())
+  updatedAt     DateTime     @updatedAt
+  deletedAt     DateTime?    // Soft Delete
+
+  @@map("users")
+}
+
+model Event {
+  id               Int               @id @default(autoincrement())
+  title            String
+  description      String?           @db.Text
+  startDate        DateTime
+  endDate          DateTime
+  location         String?
+  status           EventStatus       @default(DRAFT)
+  
+  organizerId      String
+  organizer        User              @relation(fields: [organizerId], references: [id])
+  
+  departmentId     String
+  department       Department        @relation(fields: [departmentId], references: [id])
+
+  budgetItems      BudgetItem[]
+  resourceRequests ResourceRequest[]
+  attachments      Attachment[]
+  approvals        Approval[]
+  
+  createdAt        DateTime          @default(now())
+  updatedAt        DateTime          @updatedAt
+  deletedAt        DateTime?         // Soft Delete
+
+  @@index([status])
+  @@index([departmentId, status]) // Optimized for dashboard filtering
+  @@map("events")
+}
+
+model BudgetItem {
+  id          Int      @id @default(autoincrement())
+  eventId     Int
+  event       Event    @relation(fields: [eventId], references: [id], onDelete: Cascade)
+  description String
+  amount      Decimal  @db.Decimal(10, 2)
+  category    String?  // e.g., "Food", "Logistics"
+  
+  @@map("budget_items")
+}
+
+model ResourceRequest {
+  id          Int      @id @default(autoincrement())
+  eventId     Int
+  event       Event    @relation(fields: [eventId], references: [id], onDelete: Cascade)
+  resourceName String
+  quantity    Int
+  notes       String?
+  
+  @@map("resource_requests")
+}
+
+model Attachment {
+  id          Int      @id @default(autoincrement())
+  eventId     Int
+  event       Event    @relation(fields: [eventId], references: [id], onDelete: Cascade)
+  fileName    String
+  fileUrl     String
+  fileType    String?
+  uploadedAt  DateTime @default(now())
+  
+  @@map("attachments")
+}
+
+model Approval {
+  id          Int            @id @default(autoincrement())
+  eventId     Int
+  event       Event          @relation(fields: [eventId], references: [id], onDelete: Cascade)
+  approverId  String
+  approver    User           @relation(fields: [approverId], references: [id])
+  role        Role           // Role of the approver at the time of approval
+  status      ApprovalStatus @default(PENDING)
+  comments    String?        @db.Text
+  signedAt    DateTime?      // Timestamp of approval action
+  createdAt   DateTime       @default(now())
+
+  @@index([approverId, status]) // Optimized for "My Pending Approvals"
+  @@map("approvals")
+}
+
+model Venue {
+  id            Int         @id @default(autoincrement())
+  name          String
+  capacity      Int
+  facilities    Json?       // e.g., ["Projector", "AC", "Sound System"]
+  institutionId String
+  institution   Institution @relation(fields: [institutionId], references: [id])
+  
+  @@map("venues")
+}
+
+model AuditLog {
+  id          Int      @id @default(autoincrement())
+  action      String   // CREATE, UPDATE, DELETE, APPROVE, REJECT, LOGIN
+  entityType  String   // Event, User, etc.
+  entityId    String   // ID of the affected entity (stored as string to handle UUIDs and Ints)
+  actorId     String?  // User who performed the action (nullable for system actions)
+  changes     Json?    // Old vs New values snapshot
+  ipAddress   String?
+  userAgent   String?
+  createdAt   DateTime @default(now())
+
+  @@index([entityType, entityId])
+  @@index([actorId])
+  @@map("audit_logs")
+}
+
+model Notification {
+  id          Int              @id @default(autoincrement())
+  userId      String
+  user        User             @relation(fields: [userId], references: [id])
+  title       String
+  message     String           @db.Text
+  type        NotificationType @default(INFO)
+  isRead      Boolean          @default(false)
+  metadata    Json?            // Link to eventId, approvalId, etc.
+  createdAt   DateTime         @default(now())
+
+  @@index([userId, isRead])
+  @@map("notifications")
+}
