@@ -37,7 +37,7 @@ const options = {
       },
     ],
   },
-  apis: ['./docs/swagger/*.js'], // Path to the API docs
+  apis: [require('path').join(__dirname, '../docs/swagger/*.js')], // Path to the API docs
 };
 
 const specs = swaggerJsdoc(options);
