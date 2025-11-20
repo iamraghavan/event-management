@@ -18,12 +18,22 @@ function createApp() {
     const app = express();
 
     // Middleware
+    app.use(require('compression')()); // Enable gzip compression
     app.use(helmet());
     app.use(cors());
     app.use(express.json());
     app.use(express.urlencoded({ extended: true }));
     app.use(morgan('dev'));
     app.use(globalLimiter);
+
+    // Root Handler (Fixes buffering on /)
+    app.get('/', (req, res) => {
+        res.status(200).json({
+            message: 'Event Management System API is running',
+            docs: '/api/docs',
+            health: '/api/health'
+        });
+    });
 
     // Swagger UI
     app.use('/api/docs', swaggerUi.serve, swaggerUi.setup(swaggerSpecs));
