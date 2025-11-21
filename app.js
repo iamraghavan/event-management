@@ -20,16 +20,7 @@ function createApp() {
     // Trust Proxy for Vercel/Load Balancers
     app.set('trust proxy', 1);
 
-    // Middleware
-    app.use(require('compression')()); // Enable gzip compression
-    app.use(helmet());
-    app.use(cors());
-    app.use(express.json());
-    app.use(express.urlencoded({ extended: true }));
-    app.use(morgan('dev'));
-    app.use(globalLimiter);
-
-    // Root Handler (Fixes buffering on /)
+    // Root Handler (Moved to top to avoid middleware issues)
     app.get('/', (req, res) => {
         res.status(200).json({
             message: 'Event Management System API is running',
@@ -37,6 +28,15 @@ function createApp() {
             health: '/api/health'
         });
     });
+
+    // Middleware
+    // app.use(require('compression')()); // Temporarily disabled to debug Vercel timeout
+    app.use(helmet());
+    app.use(cors());
+    app.use(express.json());
+    app.use(express.urlencoded({ extended: true }));
+    app.use(morgan('dev'));
+    app.use(globalLimiter);
 
     // Swagger UI
     app.use('/api/docs', swaggerUi.serve, swaggerUi.setup(swaggerSpecs));
@@ -61,5 +61,3 @@ function createApp() {
 }
 
 module.exports = createApp;
-
-// 101
