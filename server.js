@@ -1,7 +1,7 @@
 const pool = require('./config/db');
 const createApp = require('./app');
 
-async function startServer(port = 5000) {
+async function startServer(port = 3000) {
     // Validate DB connection before starting (fail fast)
     try {
         const conn = await pool.getConnection();
